@@ -285,7 +285,7 @@ class DataProcessor:
 
         # 根据 motion_mean 分区间，定义分区和对应颜色
         bins = [0, 2.5, 5, 25, 60, 80, np.inf]
-        colors = ['indigo', 'darkblue', 'lightblue', 'green', 'orange', 'red']
+        colors = ['#4B0082', 'plum', 'navy', 'darkgreen', 'orange', 'red']
         labels_bin = ["[0, 2.5)", "[2.5, 5)", "[5, 25)", "[25, 60)", "[60, 80)", "[80, ∞)"]
 
         df_result_sorted['motion_bin'] = pd.cut(df_result_sorted['motion_mean'],
@@ -371,10 +371,10 @@ class DataProcessor:
         
         # 定义不同组别的颜色映射
         group_color = {
-            "calm1": "indigo",
-            "clam2": "darkblue",
-            "sober": "lightblue",
-            "moving": "green",
+            "calm1": "#4B0082",
+            "clam2": "plum",
+            "sober": "navy",
+            "moving": "darkgreen",
             "exercise": "orange",
             "exercise plus": "red"
         }
