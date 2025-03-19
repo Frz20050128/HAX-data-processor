@@ -85,10 +85,6 @@ class DataProcessor:
         Args:
             url (str): 
                 the URL to get data
-        
-        Returns:
-            dict:
-                the data in JSON format
 
         Raises:
             requests.exceptions.RequestException: if the request fails
@@ -103,7 +99,6 @@ class DataProcessor:
 
         self.data_json = json.loads(response.text)
 
-        return self.data_json
 
 
     def process_data_15min(self, url=None):
@@ -116,9 +111,6 @@ class DataProcessor:
         Args:
             url (str): 
                 the URL to get data
-        
-        Returns:
-            pd.DataFrame, the DataFrame with sorted data
         """
         if self.data_json.get("status") == "error":
             sys.exit("请求错误: {}".format(self.data_json.get("message")))
@@ -194,24 +186,17 @@ class DataProcessor:
 
         self.df_result = df_result
 
-        return df_result
-
 
 
     def divide_groups(self, df_result):
         """
         divide the data into 6 groups based on motion_mean values.
         for each group, find the record with the highest and lowest citta_mean values.
-        calculate the mean of citta_mean and heartrate_mean for each group.
+        calculate the mean of citta_mean, heartrate_mean and motion_mean for each group.
 
         Args:
             df_result (pd.DataFrame):
                 the DataFrame containing citta_mean, motion_mean, and heartrate_mean columns
-        
-        Returns:
-            list, the list of DataFrames for each group
-            dict, the dictionary containing the record with the highest and lowest citta_mean values for each group
-            dict, the dictionary containing the mean of citta_mean and heartrate_mean for each group
         """
         # 使用筛选条件构造各组，并对各组按照citta_mean从大到小排序
         df_group1 = remove_overlapping(df_result[(df_result['motion_mean'] >= 0) & (df_result['motion_mean'] < 2.5)]).sort_values('citta_mean', ascending=False)
@@ -235,7 +220,8 @@ class DataProcessor:
                 min_record = group_df.loc[min_label]
                 group_min_max_records[group_name] = {"max": (max_label, max_record), "min": (min_label, min_record)}
                 group_data_mean_records[group_name] = {"citta_mean": group_df['citta_mean'].mean(),
-                                                    "heartrate_mean": group_df['heartrate_mean'].mean()}
+                                                    "heartrate_mean": group_df['heartrate_mean'].mean(),
+                                                    "motion_mean": group_df['motion_mean'].mean()}
             else:
                 group_min_max_records[group_name] = None
 
@@ -243,7 +229,7 @@ class DataProcessor:
         self.group_min_max_records = group_min_max_records
         self.group_data_mean_records = group_data_mean_records
 
-        return group_list, group_min_max_records, group_data_mean_records
+
 
     def process_data(self, url=None):
         """
@@ -253,28 +239,51 @@ class DataProcessor:
         remove the data with discontinuity.
         divide the data into 6 groups based on motion_mean values.
         for each group, find the record with the highest and lowest citta_mean values.
-        calculate the mean of citta_mean and heartrate_mean for each group.
+        calculate the mean of citta_mean, heartrate_mean and motion_mean for each group.
 
         Args:
             url (str): 
                 the URL to get data
-        
-        Returns:
-            pd.DataFrame, the DataFrame with sorted data
-            list, the list of DataFrames for each group
-            dict, the dictionary containing the record with the highest and lowest citta_mean values for each group
-            dict, the dictionary containing the mean of citta_mean and heartrate_mean for each group
         """
         if url:
+            self.url = url
             self.get_raw_data(url)
             self.process_data_15min(url)
             self.divide_groups(self.df_result)
         else:
-            self.process_data_15min(url)
-            self.divide_groups(self.df_result)
+            print("URL is not provided.")
 
-        return self.df_result, self.group_list, self.group_min_max_records, self.group_data_mean_records
+       
     
+    def get_processed_data(self):
+        """
+        get the processed data.
+
+        Returns:
+            str, the JSON format of the processed data
+        """
+
+        # 将 DataFrame 和字典数据转换为可序列化的 JSON 格式
+        output = {}
+        output["df_result"] = self.df_result.to_dict(orient="index")
+        output["group_list"] = [group.to_dict(orient="index") for group in self.group_list]
+        
+        group_min_max_serialized = {}
+        for group_name, records in self.group_min_max_records.items():
+            if records is None:
+                group_min_max_serialized[group_name] = None
+            else:
+                max_label, max_record = records["max"]
+                min_label, min_record = records["min"]
+                group_min_max_serialized[group_name] = {
+                    "max": {max_label: max_record.to_dict()},
+                    "min": {min_label: min_record.to_dict()}
+                }
+        output["group_min_max_records"] = group_min_max_serialized
+        output["group_data_mean_records"] = self.group_data_mean_records
+        
+        return json.dumps(output)
+
     def plot_data(self, image_path=None):
         """
         plot the citta_mean and heartrate_mean over time.
