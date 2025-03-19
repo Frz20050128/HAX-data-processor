@@ -76,11 +76,9 @@ class DataProcessor:
         self.group_data_mean_records = None
         self.image_path = image_path
         if url:
-            self.get_data(url)
             self.process_data(url)
-            self.divide_groups(self.df_result)
 
-    def get_data(self, url = None):
+    def get_raw_data(self, url = None):
         """
         Get data from the given URL.
         
@@ -108,7 +106,7 @@ class DataProcessor:
         return self.data_json
 
 
-    def process_data(self, url=None):
+    def process_data_15min(self, url=None):
         """
         process data from the given URL.
         create data windows for every 15 minutes and calculate the mean of citta, motion, and heartrate.
@@ -247,6 +245,36 @@ class DataProcessor:
 
         return group_list, group_min_max_records, group_data_mean_records
 
+    def process_data(self, url=None):
+        """
+        process data from the given URL.
+        create data windows for every 15 minutes and calculate the mean of citta, motion, and heartrate.
+        sort the data based on citta_mean and motion_mean.
+        remove the data with discontinuity.
+        divide the data into 6 groups based on motion_mean values.
+        for each group, find the record with the highest and lowest citta_mean values.
+        calculate the mean of citta_mean and heartrate_mean for each group.
+
+        Args:
+            url (str): 
+                the URL to get data
+        
+        Returns:
+            pd.DataFrame, the DataFrame with sorted data
+            list, the list of DataFrames for each group
+            dict, the dictionary containing the record with the highest and lowest citta_mean values for each group
+            dict, the dictionary containing the mean of citta_mean and heartrate_mean for each group
+        """
+        if url:
+            self.get_raw_data(url)
+            self.process_data_15min(url)
+            self.divide_groups(self.df_result)
+        else:
+            self.process_data_15min(url)
+            self.divide_groups(self.df_result)
+
+        return self.df_result, self.group_list, self.group_min_max_records, self.group_data_mean_records
+    
     def plot_data(self, image_path=None):
         """
         plot the citta_mean and heartrate_mean over time.
