@@ -101,23 +101,18 @@ class DataProcessor:
 
 
 
-    def process_data_15min(self, url=None):
+    def process_data_30min(self):
         """
-        process data from the given URL.
         create data windows for every 15 minutes and calculate the mean of citta, motion, and heartrate.
         sort the data based on citta_mean and motion_mean.
         remove the data with discontinuity.
-
-        Args:
-            url (str): 
-                the URL to get data
         """
         if self.data_json.get("status") == "error":
             sys.exit("请求错误: {}".format(self.data_json.get("message")))
         res = self.data_json['data']
         data_dict = {
             "timestamp": list(res.keys()),
-            "citta": [d.get("gcyy") for d in res.values()],
+            "citta": [d.get("gcyy") * 20 for d in res.values()],
             "heartrate": [d.get("HR") for d in res.values()],
             "motion": [d.get("motion") for d in res.values()]
         }
@@ -135,20 +130,20 @@ class DataProcessor:
         data = data.reindex(full_index, fill_value=0)
 
         data.index = pd.to_datetime(data.index)
-        # 分别计算citta、motion和heartrate的滚动均值（窗口18min，对应约15分钟均值，跳过前五个点以修正对齐）
-        citta_mean_15min = data['citta'].rolling('18min').mean().iloc[5:]
-        motion_mean_15min = data['motion'].rolling('18min').mean().iloc[5:]
-        heartrate_mean_15min = data['heartrate'].rolling('18min').mean().iloc[5:]
+        # 分别计算citta、motion和heartrate的滚动均值（窗口33min，对应约30分钟均值，跳过前十个点以修正对齐）
+        citta_mean_min = data['citta'].rolling('33min').mean().iloc[10:]
+        motion_mean_min = data['motion'].rolling('33min').mean().iloc[10:]
+        heartrate_mean_min = data['heartrate'].rolling('33min').mean().iloc[10:]
         
 
         initial_time = data.index[0]
     
-        window_length = pd.Timedelta(minutes=15)
+        window_length = pd.Timedelta(minutes=30)
         current_start = initial_time
             
         # 建立组别数据：每组包含时间标签、citta均值、motion均值、heartrate均值及各自不连续标记
         group_list = []
-        num_windows = len(citta_mean_15min)
+        num_windows = len(citta_mean_min)
         for i in range(num_windows):
             current_end = current_start + window_length
             label = "{} ~ {}".format(current_start.strftime("%Y-%m-%d %H:%M:%S"),
@@ -159,9 +154,9 @@ class DataProcessor:
             mark_heartrate = " [include discontinuity]" if (window_data['heartrate'] == 0).any() else ""
                 
             # 从之前计算的滚动均值Series中取出对应值
-            citta_avg = citta_mean_15min.iloc[i]
-            motion_avg = motion_mean_15min.iloc[i]
-            heartrate_avg = heartrate_mean_15min.iloc[i]
+            citta_avg = citta_mean_min.iloc[i]
+            motion_avg = motion_mean_min.iloc[i]
+            heartrate_avg = heartrate_mean_min.iloc[i]
         
             # 将当前组别数据加入列表
             group_list.append((label, citta_avg, motion_avg, heartrate_avg, mark_citta, mark_motion, mark_heartrate))
@@ -248,7 +243,7 @@ class DataProcessor:
         if url:
             self.url = url
             self.get_raw_data(url)
-            self.process_data_15min(url)
+            self.process_data_30min()
             self.divide_groups(self.df_result)
         else:
             print("URL is not provided.")
@@ -454,14 +449,14 @@ class DataProcessor:
                     if item:
                         annotations.append(item)
 
-        # 对于任意两点，若二者的 citta_mean 差值在 0.15 以内且时间差在 30 分钟以内，
+        # 对于任意两点，若二者的 citta_mean 差值在 2 以内且时间差在 30 分钟以内，
         # 则加长其中一个点（这里选择第一个未被加长的点）的直线（通过增加 xytext offset 实现）
         for i in range(len(annotations)):
             for j in range(i + 1, len(annotations)):
                 a = annotations[i]
                 b = annotations[j]
                 time_diff = abs((a['time'] - b['time']).total_seconds()) / 60.0
-                if abs(a['citta'] - b['citta']) <= 0.15 and time_diff <= 30:
+                if abs(a['citta'] - b['citta']) <= 2 and time_diff <= 30:
                     if not a['extended']:
                         text_to_use = a['text']
                         base_coords = (a['time'], a['citta'])
