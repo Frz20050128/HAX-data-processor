@@ -411,62 +411,100 @@ class DataProcessor:
             "exercise plus": "red"
         }
         
-        # === 以下新增代码：在 citta_mean 曲线上标出各组记录点对应的 citta_mean 与 heartrate_mean 值，若为同一点只标注一次 ===
-        annotations = []  # 用于保存所有标注点的信息
-        annotated_points = set()  # 用来记录已标注的点，key 为 (x, y)
+        # === 以下新增代码：分别在 citta_mean 曲线（ax1）和 heartrate_mean 曲线（ax2）上标出各组记录点对应的值 ===
+        citta_annotations = []
+        citta_annotated_points = set()
+        heartrate_annotations = []
+        heartrate_annotated_points = set()
 
-        def annotate_point(label_str, record, color):
+        def annotate_citta(label_str, record, color):
             start_time_str = label_str.split(" ~ ")[0]
             x_val = pd.to_datetime(start_time_str)
             y_val = record['citta_mean']
-            # 使用 (x_val, round(y_val, 4)) 作为唯一标识
             point_key = (x_val, round(y_val, 4))
-            if point_key in annotated_points:
+            if point_key in citta_annotated_points:
                 return None
-            annotated_points.add(point_key)
-            text = f"{record['citta_mean']:.2f}\n{record['heartrate_mean']:.2f}"
+            citta_annotated_points.add(point_key)
+            text = f"{record['citta_mean']:.2f}"
             annot = ax1.annotate(text, (x_val, y_val),
-                                xytext=(10, -10), textcoords="offset points",
-                                ha='left', va='top', fontsize=10, color=color,
-                                arrowprops=dict(arrowstyle="-", color=color))
-            return {'time': x_val, 'citta': y_val,
-                    'text': text, 'annotation': annot,
-                    'offset': (10, -10), 'extended': False,
-                    'color': color}
+                     xytext=(10, -10), textcoords="offset points",
+                     ha='left', va='top', fontsize=10, color=color,
+                     arrowprops=dict(arrowstyle="-", color=color))
+            return {'time': x_val, 'value': y_val,
+                'text': text, 'annotation': annot,
+                'offset': (10, -10), 'extended': False,
+                'color': color}
+
+        def annotate_heartrate(label_str, record, color):
+            start_time_str = label_str.split(" ~ ")[0]
+            x_val = pd.to_datetime(start_time_str)
+            y_val = record['heartrate_mean']
+            point_key = (x_val, round(y_val, 4))
+            if point_key in heartrate_annotated_points:
+                return None
+            heartrate_annotated_points.add(point_key)
+            text = f"{record['heartrate_mean']:.2f}"
+            annot = ax2.annotate(text, (x_val, y_val),
+                     xytext=(10, -10), textcoords="offset points",
+                     ha='left', va='top', fontsize=10, color=color,
+                     arrowprops=dict(arrowstyle="-", color=color))
+            return {'time': x_val, 'value': y_val,
+                'text': text, 'annotation': annot,
+                'offset': (10, -10), 'extended': False,
+                'color': color}
 
         for group_name, records in group_min_max_records.items():
             ann_color = group_color.get(group_name, "blue")
             if records is None:
                 continue
-            # 判断单组内最高与最低是否为同一点
+            # 若组内最高与最低记录为同一点，只标注一次；否则分别标注
             if records["max"][0] == records["min"][0]:
-                item = annotate_point(records["max"][0], records["max"][1], ann_color)
-                if item:
-                    annotations.append(item)
+                c_item = annotate_citta(records["max"][0], records["max"][1], ann_color)
+                h_item = annotate_heartrate(records["max"][0], records["max"][1], ann_color)
+                if c_item:
+                    citta_annotations.append(c_item)
+                if h_item:
+                    heartrate_annotations.append(h_item)
             else:
                 for rec_type in ["max", "min"]:
-                    item = annotate_point(records[rec_type][0], records[rec_type][1], ann_color)
-                    if item:
-                        annotations.append(item)
+                    c_item = annotate_citta(records[rec_type][0], records[rec_type][1], ann_color)
+                    h_item = annotate_heartrate(records[rec_type][0], records[rec_type][1], ann_color)
+                    if c_item:
+                        citta_annotations.append(c_item)
+                    if h_item:
+                        heartrate_annotations.append(h_item)
 
-        # 对于任意两点，若二者的 citta_mean 差值在 2 以内且时间差在 30 分钟以内，
-        # 则加长其中一个点（这里选择第一个未被加长的点）的直线（通过增加 xytext offset 实现）
-        for i in range(len(annotations)):
-            for j in range(i + 1, len(annotations)):
-                a = annotations[i]
-                b = annotations[j]
+        # 对于相近点（时间差在30分钟内且数值差在2以内）的标注，延长其中一个标注的偏移，使其不会重叠（分别对两个轴处理）
+        for i in range(len(citta_annotations)):
+            for j in range(i + 1, len(citta_annotations)):
+                a = citta_annotations[i]
+                b = citta_annotations[j]
                 time_diff = abs((a['time'] - b['time']).total_seconds()) / 60.0
-                if abs(a['citta'] - b['citta']) <= 2 and time_diff <= 30:
+                if abs(a['value'] - b['value']) <= 2 and time_diff <= 30:
                     if not a['extended']:
-                        text_to_use = a['text']
-                        base_coords = (a['time'], a['citta'])
+                        base_coords = (a['time'], a['value'])
                         a['annotation'].remove()
                         new_offset = (30, -30)
-                        new_annot = ax1.annotate(text_to_use, base_coords,
-                                                xytext=new_offset, textcoords="offset points",
-                                                ha='left', va='top', fontsize=10, color=a['color'],
-                                                arrowprops=dict(arrowstyle="-", color=a['color']))
+                        new_annot = ax1.annotate(a['text'], base_coords,
+                                     xytext=new_offset, textcoords="offset points",
+                                     ha='left', va='top', fontsize=10, color=a['color'],
+                                     arrowprops=dict(arrowstyle="-", color=a['color']))
                         a.update({'annotation': new_annot, 'offset': new_offset, 'extended': True})
-        
+
+        for i in range(len(heartrate_annotations)):
+            for j in range(i + 1, len(heartrate_annotations)):
+                a = heartrate_annotations[i]
+                b = heartrate_annotations[j]
+                time_diff = abs((a['time'] - b['time']).total_seconds()) / 60.0
+                if abs(a['value'] - b['value']) <= 2 and time_diff <= 30:
+                    if not a['extended']:
+                        base_coords = (a['time'], a['value'])
+                        a['annotation'].remove()
+                        new_offset = (30, -30)
+                        new_annot = ax2.annotate(a['text'], base_coords,
+                                     xytext=new_offset, textcoords="offset points",
+                                     ha='left', va='top', fontsize=10, color=a['color'],
+                                     arrowprops=dict(arrowstyle="-", color=a['color']))
+                        a.update({'annotation': new_annot, 'offset': new_offset, 'extended': True})
         plt.savefig(image_path)
 
