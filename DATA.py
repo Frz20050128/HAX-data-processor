@@ -103,7 +103,7 @@ class DataProcessor:
 
     def process_data_30min(self):
         """
-        create data windows for every 15 minutes and calculate the mean of citta, motion, and heartrate.
+        create data windows for every 30 minutes and calculate the mean of citta, motion, and heartrate.
         sort the data based on citta_mean and motion_mean.
         remove the data with discontinuity.
         """
@@ -229,7 +229,7 @@ class DataProcessor:
     def process_data(self, url=None):
         """
         process data from the given URL.
-        create data windows for every 15 minutes and calculate the mean of citta, motion, and heartrate.
+        create data windows for every 30 minutes and calculate the mean of citta, motion, and heartrate.
         sort the data based on citta_mean and motion_mean.
         remove the data with discontinuity.
         divide the data into 6 groups based on motion_mean values.
