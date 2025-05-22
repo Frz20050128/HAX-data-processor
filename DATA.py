@@ -574,3 +574,59 @@ class DataProcessor:
                         a.update({'annotation': new_annot, 'offset': new_offset, 'extended': True})
         plt.savefig(image_path)
 
+    def show_qd(self):
+        """
+        Plot the qd values over time in separate figures and save them.
+        Adds horizontal dashed black lines at y=0, +-0.268, and +-0.618 to each plot.
+        Adds text labels for these specific y-values on the y-axis.
+        """
+        if not self.qds:
+            print("QD data is not available. Please run calculate_qd first.")
+            return
+
+        # Convert the qds dictionary to a DataFrame
+        df_qd = pd.DataFrame.from_dict(self.qds, orient='index')
+        
+        # Convert index to datetime objects
+        df_qd.index = pd.to_datetime(df_qd.index)
+        
+        # Sort by time
+        df_qd.sort_index(inplace=True)
+
+        # Define the y-values for the horizontal lines and labels
+        h_lines = [0, 0.268, -0.268, 0.618, -0.618]
+        label_lines = [0.268, -0.268, 0.618, -0.618] # Values to explicitly label
+
+        # Common plotting function
+        def plot_metric(ax, data, title, filename, marker, linestyle):
+            ax.plot(df_qd.index, data, marker=marker, linestyle=linestyle)
+            # Add horizontal lines
+            for y_val in h_lines:
+                ax.axhline(y=y_val, color='black', linestyle='--')
+            
+            # Set y-axis ticks to include the specific values
+            current_ticks = list(ax.get_yticks())
+            all_ticks = sorted(list(set(current_ticks + label_lines)))
+            ax.set_yticks(all_ticks)
+            # Ensure the specific labels are formatted correctly if needed (optional)
+            # ax.set_yticklabels([f"{tick:.3f}" for tick in all_ticks]) 
+
+            ax.set_xlabel("Time")
+            ax.set_ylabel("QD Value")
+            ax.set_title(title)
+            plt.setp(ax.get_xticklabels(), rotation=45)
+            plt.tight_layout()
+            plt.savefig(filename)
+            plt.close(ax.figure) # Close the figure
+
+        # Plotting QD Citta
+        fig_citta, ax_citta = plt.subplots(figsize=(12, 6))
+        plot_metric(ax_citta, df_qd['qd_citta'], "QD Citta Over Time", 'citta_QD.png', marker='o', linestyle='-')
+
+        # Plotting QD Motion
+        fig_motion, ax_motion = plt.subplots(figsize=(12, 6))
+        plot_metric(ax_motion, df_qd['qd_motion'], "QD Motion Over Time", 'motion_QD.png', marker='o', linestyle='-')
+
+        # Plotting QD Heartrate
+        fig_heartrate, ax_heartrate = plt.subplots(figsize=(12, 6))
+        plot_metric(ax_heartrate, df_qd['qd_heartrate'], "QD Heartrate Over Time", 'heartrate_QD.png', marker='o', linestyle='-')
