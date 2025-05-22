@@ -74,6 +74,7 @@ class DataProcessor:
         self.group_list = None
         self.group_min_max_records = None
         self.group_data_mean_records = None
+        self.qds = None
         self.image_path = image_path
         if url:
             self.process_data(url)
@@ -224,7 +225,72 @@ class DataProcessor:
         self.group_min_max_records = group_min_max_records
         self.group_data_mean_records = group_data_mean_records
 
+    def calculate_qd(self):
+        """
+        calculate the qd value for each record.
+        qd = log_b(x) = ln(x) / ln(b), where b is the base of the logarithm.
+        x is the ratio of the previous value to the current value.
+        """
+        if self.data_json.get("status") == "error":
+            sys.exit("请求错误: {}".format(self.data_json.get("message")))
+        res = self.data_json['data']
 
+        qds = {}
+
+        log_base = 0.618
+
+        # Convert string keys to datetime objects for easier manipulation and lookup
+        res_dt_keys = {pd.to_datetime(k): v for k, v in res.items()}
+        
+        # Iterate through the datetime keys
+        for current_ts_dt in res_dt_keys.keys():
+            # Calculate the timestamp 3 minutes prior
+            prev_ts_dt = current_ts_dt - pd.Timedelta(minutes=3)
+
+            # Check if the previous timestamp exists in our datetime keys
+            if prev_ts_dt in res_dt_keys:
+                current_data = res_dt_keys[current_ts_dt]
+                prev_data = res_dt_keys[prev_ts_dt]
+
+                # Ensure 'gcyy' exists and is numeric in both records
+                if 'gcyy' in current_data and 'gcyy' in prev_data and \
+                isinstance(current_data.get('gcyy'), (int, float)) and \
+                isinstance(prev_data.get('gcyy'), (int, float)) and \
+                'motion' in current_data and 'motion' in prev_data and \
+                isinstance(current_data.get('motion'), (int, float)) and \
+                isinstance(prev_data.get('motion'), (int, float)) and \
+                'HR' in current_data and 'HR' in prev_data and \
+                isinstance(current_data.get('HR'), (int, float)) and \
+                isinstance(prev_data.get('HR'), (int, float)):
+
+                    current_citta = current_data['gcyy']
+                    prev_citta = prev_data['gcyy']
+                    current_motion = current_data['motion']
+                    prev_motion = prev_data['motion']
+                    current_heartrate = current_data['HR']
+                    prev_heartrate = prev_data['HR']
+
+                    # Check for division by zero and ensure ratio is positive for log
+                    if prev_citta != 0 and current_citta > 0 and prev_citta > 0 and \
+                    prev_motion != 0 and current_motion > 0 and prev_motion > 0 and \
+                    prev_heartrate != 0 and current_heartrate > 0 and prev_heartrate > 0:  
+                        ratio_citta = prev_citta / current_citta
+                        ratio_motion = prev_motion / current_motion
+                        ratio_heartrate = prev_heartrate / current_heartrate
+                        # Calculate log base 0.618: log_b(x) = ln(x) / ln(b)
+                        try:
+                            qd_citta = np.log(ratio_citta) / np.log(log_base)
+                            qd_motion = np.log(ratio_motion) / np.log(log_base)
+                            qd_heartrate = np.log(ratio_heartrate) / np.log(log_base)
+                            # Store the result with the original string timestamp as key
+                            current_ts_str = current_ts_dt.strftime("%Y-%m-%d %H:%M:%S")
+                            qds[current_ts_str] = {'qd_citta': qd_citta, 'qd_motion': qd_motion, 'qd_heartrate': qd_heartrate}
+                        except ValueError:
+                            # Handle potential math domain errors if ratio is non-positive, though checked above
+                            pass 
+        
+        self.qds = qds
+        
 
     def process_data(self, url=None):
         """
